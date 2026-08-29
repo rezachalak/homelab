@@ -2,3 +2,8 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: local-path-storage
+  labels:
+    # The provisioner's helper pods use hostPath to create/remove directories
+    # on the node's disk, which the cluster-wide "baseline" PodSecurity
+    # default forbids.
+    pod-security.kubernetes.io/enforce: privileged
