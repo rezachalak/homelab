@@ -51,6 +51,8 @@ spec:
                   mountPath: /config
               securityContext:
                 allowPrivilegeEscalation: false
+                seccompProfile:
+                  type: RuntimeDefault
                 readOnlyRootFilesystem: true
                 runAsNonRoot: true
                 runAsUser: 65534
