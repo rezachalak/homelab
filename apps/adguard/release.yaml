@@ -22,6 +22,12 @@ spec:
         accessMode: ReadWriteOnce
         size: 2Gi
     service:
+      # The chart's own default seed config sets bind_port: 80, but its default
+      # Service/probe port is 3000 - override to keep them in sync.
+      main:
+        ports:
+          http:
+            port: 80
       dns-tcp:
         annotations:
           metallb.universe.tf/allow-shared-ip: null
