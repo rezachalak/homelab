@@ -44,3 +44,10 @@ spec:
       enabled: true
     operator:
       replicas: 1
+    gatewayAPI:
+      enabled: true
+    hubble:
+      relay:
+        enabled: true
+      ui:
+        enabled: true

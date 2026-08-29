@@ -2,6 +2,8 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - local-path-provisioner
+  - gateway-api-crds
   - cilium
+  - gateway
   - metrics-server
   - cloudflared
