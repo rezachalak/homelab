@@ -15,9 +15,11 @@ spec:
     persistence:
       config:
         enabled: true
+        accessMode: ReadWriteOnce
         size: 512Mi
       data:
         enabled: true
+        accessMode: ReadWriteOnce
         size: 2Gi
     service:
       dns-tcp:
