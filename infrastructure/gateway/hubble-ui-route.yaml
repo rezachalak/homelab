@@ -8,7 +8,7 @@ spec:
     - name: gateway
       namespace: kube-system
   hostnames:
-    - hubble.rezoreyz
+    - hubble.rezoreyz.lan
   rules:
     - backendRefs:
         - name: hubble-ui

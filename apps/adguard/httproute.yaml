@@ -8,7 +8,7 @@ spec:
     - name: gateway
       namespace: kube-system
   hostnames:
-    - adguard.rezoreyz
+    - adguard.rezoreyz.lan
   rules:
     - backendRefs:
         - name: adguard-home

@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: adguard-rewrites
+  namespace: adguard
+data:
+  # AdGuard's Helm chart only seeds config on first boot (never reapplies it), so
+  # DNS rewrites are reconciled into the running instance via its REST API instead -
+  # see rewrites-cronjob.yaml. Add more "domain answer" lines here as needed.
+  rewrites.txt: |
+    *.rezoreyz.lan 192.168.25.101
