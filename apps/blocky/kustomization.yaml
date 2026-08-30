@@ -4,6 +4,3 @@ resources:
   - namespace.yaml
   - repository.yaml
   - release.yaml
-  - httproute.yaml
-  - rewrites-configmap.yaml
-  - rewrites-cronjob.yaml

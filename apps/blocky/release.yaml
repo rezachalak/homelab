@@ -1,0 +1,61 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: blocky
+  namespace: blocky
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: blocky
+      version: "11.2.1"
+      sourceRef:
+        kind: HelmRepository
+        name: k8s-home-lab
+  values:
+    service:
+      dns-tcp:
+        enabled: true
+        type: LoadBalancer
+        annotations:
+          lbipam.cilium.io/ips: "192.168.25.100"
+          lbipam.cilium.io/sharing-key: "dns"
+      dns-udp:
+        enabled: true
+        type: LoadBalancer
+        annotations:
+          lbipam.cilium.io/ips: "192.168.25.100"
+          lbipam.cilium.io/sharing-key: "dns"
+    # Unlike AdGuard, Blocky has no runtime-mutable state - this file is read fresh
+    # on every restart, so it's the actual source of truth (no reconciler needed).
+    config: |
+      upstreams:
+        groups:
+          default:
+            - https://dns.quad9.net/dns-query
+            - https://cloudflare-dns.com/dns-query
+        strategy: parallel_best
+        timeout: 2s
+
+      customDNS:
+        customTTL: 1h
+        mapping:
+          rezoreyz.lan: 192.168.25.101
+
+      blocking:
+        denylists:
+          ads:
+            - https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts
+        clientGroupsBlock:
+          default:
+            - ads
+        blockType: zeroIp
+        loading:
+          refreshPeriod: 24h
+
+      caching:
+        minTime: 5m
+
+      ports:
+        dns:
+          - 53
