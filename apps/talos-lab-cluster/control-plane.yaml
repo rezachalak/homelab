@@ -1,7 +1,10 @@
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: OpenStackMachineTemplate
 metadata:
-  name: talos-lab-control-plane
+  # OpenStackMachineTemplate.spec is immutable - changing the flavor
+  # requires a new object (see https://cluster-api.sigs.k8s.io/tasks/change-machine-template.html),
+  # referenced below by TalosControlPlane.spec.infrastructureTemplate.
+  name: talos-lab-control-plane-v2
   namespace: talos-lab-cluster
 spec:
   template:
@@ -25,7 +28,7 @@ spec:
   infrastructureTemplate:
     apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
     kind: OpenStackMachineTemplate
-    name: talos-lab-control-plane
+    name: talos-lab-control-plane-v2
   controlPlaneConfig:
     controlplane:
       generateType: controlplane
