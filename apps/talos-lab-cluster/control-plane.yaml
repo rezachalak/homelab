@@ -6,7 +6,10 @@ metadata:
 spec:
   template:
     spec:
-      flavor: m1.small
+      # m1.small (1 vCPU) was too tight for etcd+apiserver+scheduler+
+      # controller-manager to bootstrap reliably - etcd got stuck
+      # indefinitely in a "Preparing" pre-state under CPU starvation.
+      flavor: m1.medium
       image:
         filter:
           name: talos-1.13.10
