@@ -4,7 +4,11 @@ resources:
   - namespace.yaml
   - repository.yaml
   - release.yaml
-  - providers.yaml
+  # Provider CRs (CoreProvider/InfrastructureProvider/etc.) live in the separate
+  # top-level capi-providers/ Kustomization, applied only after this one is
+  # Ready — their CRDs come from the capi-operator HelmRelease above, and
+  # Flux applies everything in one Kustomization as a single sorted batch, so
+  # mixing them here causes a chicken-and-egg dry-run failure.
   # openstack-resource-controller (ORC): required by CAPO >= v0.12, not part of
   # the CAPI provider CR contract so it's applied directly from its release.
   - https://github.com/k-orc/openstack-resource-controller/releases/download/v2.4.0/install.yaml
