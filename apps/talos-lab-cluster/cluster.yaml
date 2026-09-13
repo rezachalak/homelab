@@ -1,0 +1,60 @@
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: Cluster
+metadata:
+  name: talos-lab
+  namespace: talos-lab-cluster
+spec:
+  clusterNetwork:
+    pods:
+      cidrBlocks:
+        - 10.244.0.0/16
+    services:
+      cidrBlocks:
+        - 10.96.0.0/12
+    serviceDomain: cluster.local
+  controlPlaneRef:
+    apiGroup: controlplane.cluster.x-k8s.io
+    kind: TalosControlPlane
+    name: talos-lab-control-plane
+  infrastructureRef:
+    apiGroup: infrastructure.cluster.x-k8s.io
+    kind: OpenStackCluster
+    name: talos-lab
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: OpenStackCluster
+metadata:
+  name: talos-lab
+  namespace: talos-lab-cluster
+spec:
+  # No Octavia on this DevStack, so no managed API server load balancer -
+  # CAPO instead assigns a floating IP directly to the control-plane node.
+  disableAPIServerFloatingIP: false
+  identityRef:
+    type: Secret
+    cloudName: openstack
+    name: talos-lab-cloud-config
+  externalNetwork:
+    filter:
+      name: public
+  managedSubnets:
+    - cidr: 10.6.0.0/24
+  managedSecurityGroups:
+    allowAllInClusterTraffic: true
+    allNodesSecurityGroupRules:
+      - name: Kubernetes API from LAN
+        description: Allow kube-apiserver access from the home LAN
+        direction: ingress
+        etherType: IPv4
+        protocol: tcp
+        portRangeMin: 6443
+        portRangeMax: 6443
+        remoteIPPrefix: 192.168.25.0/24
+      - name: Talos API from LAN
+        description: Allow talosctl access from the home LAN
+        direction: ingress
+        etherType: IPv4
+        protocol: tcp
+        portRangeMin: 50000
+        portRangeMax: 50000
+        remoteIPPrefix: 192.168.25.0/24

@@ -1,0 +1,29 @@
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: OpenStackMachineTemplate
+metadata:
+  name: talos-lab-control-plane
+  namespace: talos-lab-cluster
+spec:
+  template:
+    spec:
+      flavor: m1.small
+      image:
+        filter:
+          name: talos-1.13.10
+---
+apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
+kind: TalosControlPlane
+metadata:
+  name: talos-lab-control-plane
+  namespace: talos-lab-cluster
+spec:
+  replicas: 1
+  version: v1.32.4
+  infrastructureTemplate:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+    kind: OpenStackMachineTemplate
+    name: talos-lab-control-plane
+  controlPlaneConfig:
+    controlplane:
+      generateType: controlplane
+      talosVersion: v1.13.10
