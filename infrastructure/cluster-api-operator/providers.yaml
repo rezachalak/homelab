@@ -1,0 +1,39 @@
+# CAPI provider components, installed declaratively by the cluster-api-operator
+# (see release.yaml). "openstack" is a built-in provider name the operator
+# resolves automatically; the Talos providers are not, so they need an explicit
+# fetchConfig pointing at siderolabs' release manifests.
+apiVersion: operator.cluster.x-k8s.io/v1alpha2
+kind: CoreProvider
+metadata:
+  name: cluster-api
+  namespace: capi-system
+spec:
+  version: v1.12.11
+---
+apiVersion: operator.cluster.x-k8s.io/v1alpha2
+kind: InfrastructureProvider
+metadata:
+  name: openstack
+  namespace: capo-system
+spec:
+  version: v0.14.8
+---
+apiVersion: operator.cluster.x-k8s.io/v1alpha2
+kind: BootstrapProvider
+metadata:
+  name: talos
+  namespace: cabpt-system
+spec:
+  version: v0.6.12
+  fetchConfig:
+    url: https://github.com/siderolabs/cluster-api-bootstrap-provider-talos/releases/download/v0.6.12/bootstrap-components.yaml
+---
+apiVersion: operator.cluster.x-k8s.io/v1alpha2
+kind: ControlPlaneProvider
+metadata:
+  name: talos
+  namespace: cacppt-system
+spec:
+  version: v0.5.13
+  fetchConfig:
+    url: https://github.com/siderolabs/cluster-api-control-plane-provider-talos/releases/download/v0.5.13/control-plane-components.yaml

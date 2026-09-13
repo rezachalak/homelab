@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - repository.yaml
+  - release.yaml
+  - providers.yaml
+  # openstack-resource-controller (ORC): required by CAPO >= v0.12, not part of
+  # the CAPI provider CR contract so it's applied directly from its release.
+  - https://github.com/k-orc/openstack-resource-controller/releases/download/v2.4.0/install.yaml
