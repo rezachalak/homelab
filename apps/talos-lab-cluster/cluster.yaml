@@ -39,6 +39,12 @@ spec:
       name: public
   managedSubnets:
     - cidr: 10.6.0.0/24
+      # Without this, the subnet gets no DNS server at all and every
+      # container image pull (etcd, kube-apiserver, ...) fails, leaving
+      # nodes stuck indefinitely mid-bootstrap.
+      dnsNameservers:
+        - 8.8.8.8
+        - 1.1.1.1
   managedSecurityGroups:
     allowAllInClusterTraffic: true
     allNodesSecurityGroupRules:
