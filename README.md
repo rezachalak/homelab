@@ -3,28 +3,69 @@
 My homelab, managed with GitOps. [Flux](https://fluxcd.io/) watches this repo and
 reconciles everything into the cluster — there is nothing to `kubectl apply` by hand.
 
-## Layout
+## How the GitOps loop works
+
+Flux itself is installed and kept up to date by the
+[flux-operator](https://fluxcd.control-plane.io/operator/), driven by a single
+`FluxInstance` resource:
+
+```mermaid
+flowchart TD
+    op["flux-operator<br/>(the one manual install)"]
+    fi["FluxInstance 'flux'<br/>clusters/rezo-lab/flux-system/"]
+    ctl["Flux controllers<br/>source · kustomize · helm · notification"]
+    gh[("github.com/rezachalak/homelab<br/>refs/heads/main")]
+    gr["GitRepository 'flux-system'"]
+    ks["the three Kustomizations<br/>clusters/rezo-lab/*.yaml"]
+    st["cluster state"]
+
+    op -->|reconciles| fi
+    fi -->|"installs, pinned to 2.x"| ctl
+    fi -->|"spec.sync creates"| gr
+    gh -->|"cloned every 1m"| gr
+    gr -->|"path: clusters/rezo-lab"| ks
+    ctl -->|reconcile| ks
+    ks -->|apply| st
+```
+
+The only manual step is installing the flux-operator. Everything below it — the Flux
+controllers, the `GitRepository`, and the `FluxInstance` itself, since
+`flux-instance.yaml` sits inside the synced path — is reconciled from git.
+
+`clusters/rezo-lab` is the only path Flux is pointed at, and all it contains is three
+`Kustomization` objects that pull in the rest of the repo, in order:
+
+```mermaid
+flowchart TD
+    subgraph s1["1 · ./infrastructure"]
+        i["storage · CNI · Gateway API · metrics<br/>tunnel · cert-manager · capi-operator"]
+    end
+    subgraph s2["2 · ./capi-providers"]
+        p["CoreProvider · OpenStack<br/>Talos bootstrap + control-plane"]
+    end
+    subgraph s3["3 · ./apps"]
+        a["blocky · talos-lab-cluster"]
+    end
+
+    s1 ==>|"dependsOn, wait: true"| s2
+    s2 ==>|"dependsOn, wait: true"| s3
+```
+
+Each arrow is a `dependsOn` with `wait: true`, so a stage only starts once everything
+in the previous one reports Ready. `apps` depends on both of the stages above it.
+
+## Repo layout
 
 ```
-clusters/rezo-lab/     Flux entrypoint for the rezo-lab management cluster
-  flux-system/         FluxInstance (flux-operator) — what Flux itself runs as
+clusters/rezo-lab/     Flux entrypoint — the only path Flux reads
+  flux-system/         FluxInstance: what Flux itself runs as
   infrastructure.yaml  \
-  capi-providers.yaml   >  the three Flux Kustomizations, chained with dependsOn
+  capi-providers.yaml   >  the three Kustomizations above
   apps.yaml            /
 infrastructure/        cluster-level plumbing: CNI, storage, ingress, CAPI operator
 capi-providers/        Cluster API provider CRs (split out; see below)
 apps/                  the actual workloads
 ```
-
-`clusters/rezo-lab` is the only path Flux is pointed at. Everything else is pulled
-in from there:
-
-```
-infrastructure  ──►  capi-providers  ──►  apps
-```
-
-Each arrow is a `dependsOn` with `wait: true`, so a stage only starts once the
-previous one is fully Ready.
 
 ## The management cluster
 
@@ -40,7 +81,9 @@ running.
 | `.100` | Blocky — LAN DNS (TCP + UDP share the IP via `sharing-key`) |
 | `.101` | Cilium Gateway — HTTP for `*.rezoreyz.lan` |
 
-## infrastructure/
+## Platform components
+
+Everything in `infrastructure/` that isn't Cluster API:
 
 | Component | Version | Notes |
 |---|---|---|
@@ -50,15 +93,32 @@ running.
 | `gateway` | — | the `Gateway` on `.101` plus the `hubble.rezoreyz.lan` route |
 | `metrics-server` | latest | `--kubelet-insecure-tls` |
 | `cloudflared` | image `2026.8.2` | remotely-managed tunnel, 2 replicas |
-| `cert-manager` | v1.21.2 | prerequisite for the CAPI operator |
-| `cluster-api-operator` | 0.29.0 | plus [ORC](https://github.com/k-orc/openstack-resource-controller) v2.4.0, required by CAPO ≥ v0.12 |
 
-## capi-providers/
+## Apps
 
-The Cluster API provider CRs live in their own top-level Kustomization rather than
-next to the operator's HelmRelease. Flux applies one Kustomization as a single
-sorted batch, so keeping the CRs beside the release that installs their CRDs is a
-chicken-and-egg dry-run failure. Splitting them lets `dependsOn` order the two.
+**`blocky`** — LAN DNS on `192.168.25.100`. DoH upstreams (Quad9, Cloudflare) with
+`parallel_best`, StevenBlack's list for ad blocking, and a `customDNS` entry mapping
+`rezoreyz.lan` to the gateway. Blocky has no runtime-mutable state, so the config
+block in `release.yaml` is the actual source of truth.
+
+## Cluster API
+
+The cluster runs [Cluster API](https://cluster-api.sigs.k8s.io/) so it can provision
+further Kubernetes clusters declaratively. This spans all three stages of the chain:
+
+```mermaid
+flowchart TD
+    cm["cert-manager v1.21.2<br/>infrastructure/cert-manager"]
+    op["cluster-api-operator 0.29.0<br/>+ ORC v2.4.0<br/>infrastructure/cluster-api-operator"]
+    pr["Provider CRs<br/>capi-providers/"]
+    cl["talos-lab workload cluster<br/>apps/talos-lab-cluster"]
+
+    cm -->|"HelmRelease dependsOn"| op
+    op -->|"installs provider CRDs"| pr
+    pr -->|"reconcile the Cluster,<br/>TalosControlPlane and<br/>MachineDeployment CRs into"| cl
+```
+
+### Providers
 
 | Provider | Version |
 |---|---|
@@ -68,21 +128,24 @@ chicken-and-egg dry-run failure. Splitting them lets `dependsOn` order the two.
 | ControlPlaneProvider `talos` | v0.5.13 |
 
 The Talos providers aren't names the operator resolves on its own, so they carry an
-explicit `fetchConfig` pointing at siderolabs' release manifests.
+explicit `fetchConfig` pointing at siderolabs' release manifests. The operator also
+needs [ORC](https://github.com/k-orc/openstack-resource-controller), applied straight
+from its release manifest since it isn't part of the provider CR contract.
 
-## apps/
+### Why the provider CRs are a separate Kustomization
 
-**`blocky`** — LAN DNS on `192.168.25.100`. DoH upstreams (Quad9, Cloudflare) with
-`parallel_best`, StevenBlack's list for ad blocking, and a `customDNS` entry mapping
-`rezoreyz.lan` to the gateway. Blocky has no runtime-mutable state, so the config
-block in `release.yaml` is the actual source of truth.
+They'd naturally sit next to the operator's `HelmRelease`, but Flux applies one
+Kustomization as a single sorted batch — so the CRs get dry-run validated against
+CRDs the release in that same batch hasn't installed yet. Splitting them into their
+own top-level Kustomization lets `dependsOn` order the two properly.
 
-**`talos-lab-cluster`** — a workload Talos cluster (`talos-lab`, Kubernetes v1.32.4,
-Talos v1.13.10) provisioned on OpenStack through Cluster API: 1 control-plane node
-(`m1.medium`) and 1 worker (`m1.small`). The target is a DevStack without Octavia,
-so there's no managed API server load balancer — CAPO assigns a floating IP directly
-to the control-plane node instead. Security-group rules open the Kubernetes API
-(`6443`) and the Talos API (`50000`) to the home LAN only.
+### The talos-lab workload cluster
+
+A Talos cluster (`talos-lab`, Kubernetes v1.32.4, Talos v1.13.10) provisioned on
+OpenStack: 1 control-plane node (`m1.medium`) and 1 worker (`m1.small`). The target is
+a DevStack without Octavia, so there's no managed API server load balancer — CAPO
+assigns a floating IP directly to the control-plane node instead. Security-group rules
+open the Kubernetes API (`6443`) and the Talos API (`50000`) to the home LAN only.
 
 ## Secrets
 
