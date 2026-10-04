@@ -44,7 +44,7 @@ flowchart TD
         p["CoreProvider · OpenStack<br/>Talos bootstrap + control-plane"]
     end
     subgraph s3["3 · ./apps"]
-        a["blocky · talos-lab-cluster"]
+        a["blocky"]
     end
 
     s1 ==>|"dependsOn, wait: true"| s2
@@ -96,6 +96,8 @@ Everything in `infrastructure/` that isn't Cluster API:
 
 ## Apps
 
+The only workload in `apps/` right now is Blocky.
+
 **`blocky`** — LAN DNS on `192.168.25.100`. DoH upstreams (Quad9, Cloudflare) with
 `parallel_best`, StevenBlack's list for ad blocking, and a `customDNS` entry mapping
 `rezoreyz.lan` to the gateway. Blocky has no runtime-mutable state, so the config
@@ -111,11 +113,11 @@ flowchart TD
     cm["cert-manager v1.21.2<br/>infrastructure/cert-manager"]
     op["cluster-api-operator 0.29.0<br/>+ ORC v2.4.0<br/>infrastructure/cluster-api-operator"]
     pr["Provider CRs<br/>capi-providers/"]
-    cl["talos-lab workload cluster<br/>apps/talos-lab-cluster"]
+    cl["workload clusters<br/>(none currently provisioned)"]
 
     cm -->|"HelmRelease dependsOn"| op
     op -->|"installs provider CRDs"| pr
-    pr -->|"reconcile the Cluster,<br/>TalosControlPlane and<br/>MachineDeployment CRs into"| cl
+    pr -.->|"stand ready to reconcile<br/>Cluster / TalosControlPlane /<br/>MachineDeployment CRs into"| cl
 ```
 
 ### Providers
@@ -139,23 +141,25 @@ Kustomization as a single sorted batch — so the CRs get dry-run validated agai
 CRDs the release in that same batch hasn't installed yet. Splitting them into their
 own top-level Kustomization lets `dependsOn` order the two properly.
 
-### The talos-lab workload cluster
+### Workload clusters
 
-A Talos cluster (`talos-lab`, Kubernetes v1.32.4, Talos v1.13.10) provisioned on
-OpenStack: 1 control-plane node (`m1.medium`) and 1 worker (`m1.small`). The target is
-a DevStack without Octavia, so there's no managed API server load balancer — CAPO
-assigns a floating IP directly to the control-plane node instead. Security-group rules
-open the Kubernetes API (`6443`) and the Talos API (`50000`) to the home LAN only.
+None at the moment. A `talos-lab` cluster (1 control-plane + 1 worker on a DevStack
+without Octavia) lived in `apps/talos-lab-cluster/` until it was torn down on
+2026-10-04; the manifests are in git history if they're wanted as a starting point.
+
+The providers above stay installed so a new cluster is just a matter of adding the
+`Cluster` / `TalosControlPlane` / `MachineDeployment` manifests back under `apps/`.
+Provisioning against OpenStack also needs a credentials Secret (`clouds.yaml`) in the
+target namespace, created out of band.
 
 ## Secrets
 
-Nothing sensitive is committed. Two Secrets are created out of band and referenced
+Nothing sensitive is committed. This Secret is created out of band and referenced
 from the manifests:
 
 | Secret | Namespace | Used by |
 |---|---|---|
 | `cloudflared-token` | `cloudflared` | tunnel token, injected via `valuesFrom` at render time |
-| `talos-lab-cloud-config` | `talos-lab-cluster` | OpenStack `clouds.yaml` for CAPO |
 
 ## License
 
