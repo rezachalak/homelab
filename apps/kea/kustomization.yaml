@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: kea
+resources:
+  - namespace.yaml
+  - pvc.yaml
+  - deployment.yaml
+# Hash-suffixed ConfigMap: any change to the Kea config rolls the pod.
+configMapGenerator:
+  - name: kea-dhcp4
+    files:
+      - kea-dhcp4.json
