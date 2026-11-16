@@ -44,7 +44,7 @@ flowchart TD
         p["CoreProvider · OpenStack<br/>Talos bootstrap + control-plane"]
     end
     subgraph s3["3 · ./apps"]
-        a["blocky · kea"]
+        a["blocky"]
     end
 
     s1 ==>|"dependsOn, wait: true"| s2
@@ -96,16 +96,7 @@ Everything in `infrastructure/` that isn't Cluster API:
 
 ## Apps
 
-The workloads in `apps/` are Blocky and Kea.
-
-**`kea`** — ISC Kea DHCPv4 for the Wi-Fi network. The A1 router's DHCP can't be
-disabled, so the GWN7670 AP runs its SSID in NAT mode (`10.1.0.0/24`, gateway
-`10.1.0.1`) with DHCP relay pointed at `192.168.25.25`. Kea only has that one
-subnet, so it never answers on `192.168.25.0/24` and can't collide with the router.
-It runs with `hostNetwork` in a privileged-PSA namespace, but the container drops
-every capability except `NET_BIND_SERVICE` (+ `NET_RAW`, which the image's file caps
-require just to exec), has a read-only root FS, and exposes no HTTP control API.
-Leases persist on a `local-path` PVC.
+The only workload in `apps/` right now is Blocky.
 
 **`blocky`** — LAN DNS on `192.168.25.100`. DoH upstreams (Quad9, Cloudflare) with
 `parallel_best`, StevenBlack's list for ad blocking, and a `customDNS` entry mapping
