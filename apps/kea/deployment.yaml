@@ -35,7 +35,11 @@ spec:
       containers:
         - name: kea-dhcp4
           image: docker.cloudsmith.io/isc/docker/kea-dhcp4:3.2.1-20260930@sha256:946be1df56856233f75443a61fd49c030daa9b07f183d68d5f9153637bb8c266
-          command: [ "/usr/sbin/kea-dhcp4", "-c", "/etc/kea/kea-dhcp4.conf" ]
+          # Kea 3.x refuses socket/lease dirs looser than 0750; emptyDir and
+          # local-path volumes come up 0777, so tighten them before starting.
+          command: [ "/bin/sh", "-c" ]
+          args:
+            - chmod 0750 /var/run/kea /var/lib/kea && exec /usr/sbin/kea-dhcp4 -c /etc/kea/kea-dhcp4.conf
           securityContext:
             # Runs as uid 0 *inside the container only* because containerd
             # gives a non-root process no effective capabilities (no ambient
