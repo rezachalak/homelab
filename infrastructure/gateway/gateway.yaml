@@ -12,6 +12,11 @@ spec:
     - name: http
       protocol: HTTP
       port: 80
+      # Only namespaces that opt in with this label may attach routes; with "All" any
+      # namespace could publish a hostname on the LAN gateway.
       allowedRoutes:
         namespaces:
-          from: All
+          from: Selector
+          selector:
+            matchLabels:
+              gateway.rezoreyz.lan/routes: allowed

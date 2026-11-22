@@ -1,0 +1,34 @@
+# Any Cilium policy that selects a pod puts it in default-deny for that direction,
+# so this allows only what Blocky needs (derived from Hubble flows):
+#   in:  DNS on :53 from the LAN (via the LoadBalancer IP) and kubelet probes
+#   out: cluster DNS (to resolve upstream/denylist hostnames) and HTTPS to the
+#        DoH upstreams + denylist downloads
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: blocky
+  namespace: blocky
+spec:
+  endpointSelector: {}
+  ingress:
+    - fromEntities:
+        - all
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+    - toEntities:
+        - world
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP

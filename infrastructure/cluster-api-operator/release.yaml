@@ -5,6 +5,8 @@ metadata:
   namespace: capi-operator-system
 spec:
   interval: 1h
+  driftDetection:
+    mode: enabled
   dependsOn:
     - name: cert-manager
       namespace: cert-manager
@@ -15,3 +17,17 @@ spec:
       sourceRef:
         kind: HelmRepository
         name: capi-operator
+  values:
+    # The chart ships empty security contexts; this is what PodSecurity "restricted"
+    # (enforced on the namespace) requires. The image is distroless/nonroot.
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 65532
+      runAsGroup: 65532
+      seccompProfile:
+        type: RuntimeDefault
+    containerSecurityContext:
+      manager:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]

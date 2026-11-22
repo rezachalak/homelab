@@ -38,7 +38,7 @@ controllers, the `GitRepository`, and the `FluxInstance` itself, since
 ```mermaid
 flowchart TD
     subgraph s1["1 · ./infrastructure"]
-        i["storage · CNI · Gateway API · metrics<br/>tunnel · cert-manager · capi-operator"]
+        i["storage · CNI · Gateway API · metrics<br/>cert-manager · capi-operator"]
     end
     subgraph s2["2 · ./capi-providers"]
         p["CoreProvider · OpenStack<br/>Talos bootstrap + control-plane"]
@@ -89,10 +89,9 @@ Everything in `infrastructure/` that isn't Cluster API:
 |---|---|---|
 | `local-path-provisioner` | chart from git `main` | default StorageClass, backed by `/var/mnt/data` (the dedicated 322GB disk provisioned as a Talos user volume) |
 | `gateway-api-crds` | v1.6.1 | standard CRDs, pulled straight from upstream |
-| `cilium` | 1.20.x | CNI, kube-proxy replacement via Talos KubePrism (`localhost:7445`), L2 announcements, Gateway API, Hubble relay + UI |
-| `gateway` | — | the `Gateway` on `.101` plus the `hubble.rezoreyz.lan` route |
-| `metrics-server` | latest | `--kubelet-insecure-tls` |
-| `cloudflared` | image `2026.8.2` | remotely-managed tunnel, 2 replicas |
+| `cilium` | 1.20.5 | CNI, kube-proxy replacement via Talos KubePrism (`localhost:7445`), L2 announcements, Gateway API, Hubble relay + UI (UI not exposed — use `cilium hubble ui`) |
+| `gateway` | — | the `Gateway` on `.101`; only namespaces labelled `gateway.rezoreyz.lan/routes: allowed` can attach routes |
+| `metrics-server` | chart 3.14.0 | `--kubelet-insecure-tls` |
 
 ## Apps
 
@@ -152,14 +151,26 @@ The providers above stay installed so a new cluster is just a matter of adding t
 Provisioning against OpenStack also needs a credentials Secret (`clouds.yaml`) in the
 target namespace, created out of band.
 
+## Security baseline
+
+- **Drift detection** is on for every `HelmRelease`, so hand edits to chart-managed
+  objects are reverted to what git says. Change things in git, not with `kubectl`.
+- **Versions are pinned** (charts and the Flux distribution); bump them deliberately.
+- **PodSecurity**: the cluster default (Talos admission config) enforces `baseline`.
+  Every namespace in this repo except `local-path-storage` (hostPath helper pods) is
+  labelled `enforce: restricted`. Charts that don't comply out of the box are fixed
+  via values (blocky, capi-operator) or the CAPI operator's `manifestPatches`
+  (Talos providers).
+- **Network policy**: `blocky` and the six CAPI/ORC namespaces have a
+  `CiliumNetworkPolicy` that default-denies both directions and allows only the flows
+  observed in Hubble. New traffic needs a rule in that namespace's `networkpolicy.yaml`;
+  look for drops with `hubble observe --namespace <ns> --verdict DROPPED`.
+
 ## Secrets
 
-Nothing sensitive is committed. This Secret is created out of band and referenced
-from the manifests:
-
-| Secret | Namespace | Used by |
-|---|---|---|
-| `cloudflared-token` | `cloudflared` | tunnel token, injected via `valuesFrom` at render time |
+Nothing sensitive is committed, and nothing currently depends on a Secret created out
+of band. (The Cloudflare tunnel and its `cloudflared-token` Secret were removed on
+2026-11-22; the manifests are in git history.)
 
 ## License
 
