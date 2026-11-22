@@ -6,6 +6,5 @@ resources:
   - cilium
   - gateway
   - metrics-server
-  - cloudflared
   - cert-manager
   - cluster-api-operator
