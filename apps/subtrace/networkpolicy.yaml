@@ -1,0 +1,31 @@
+# Default-deny for the Subtrace demo (it runs as root with SYS_PTRACE, so keep its
+# blast radius small).
+#   in:  kubelet probes only; test it with `kubectl port-forward` (not subject to policy)
+#   out: cluster DNS, and HTTPS to the internet - the init container downloads the
+#        binary from GitHub, and the tracer talks to the subtrace.dev API plus a tunnel
+#        endpoint the API hands out at runtime (so no fixed FQDN list is possible).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: subtrace
+  namespace: subtrace
+spec:
+  endpointSelector: {}
+  ingress:
+    - fromEntities:
+        - host
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+    - toEntities:
+        - world
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP

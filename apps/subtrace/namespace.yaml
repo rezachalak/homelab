@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: subtrace
+  labels:
+    # PodSecurity exception (like local-path-storage): Subtrace needs SYS_PTRACE,
+    # which neither "restricted" nor "baseline" allows, and on this node it must also
+    # run as root (see deployment.yaml). Keep this namespace for the Subtrace demo
+    # only. warn/audit stay at "restricted" so any further deviation is visible.
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest

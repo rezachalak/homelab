@@ -44,7 +44,7 @@ flowchart TD
         p["CoreProvider · OpenStack<br/>Talos bootstrap + control-plane"]
     end
     subgraph s3["3 · ./apps"]
-        a["blocky"]
+        a["blocky · subtrace demo"]
     end
 
     s1 ==>|"dependsOn, wait: true"| s2
@@ -95,12 +95,23 @@ Everything in `infrastructure/` that isn't Cluster API:
 
 ## Apps
 
-The only workload in `apps/` right now is Blocky.
+Two workloads live in `apps/`: Blocky, and a Subtrace demo.
 
 **`blocky`** — LAN DNS on `192.168.25.100`. DoH upstreams (Quad9, Cloudflare) with
 `parallel_best`, StevenBlack's list for ad blocking, and a `customDNS` entry mapping
 `rezoreyz.lan` to the gateway. Blocky has no runtime-mutable state, so the config
 block in `release.yaml` is the actual source of truth.
+
+**`subtrace`** — a trial of [Subtrace](https://subtrace.dev), an HTTP request
+inspector. It has no in-cluster server: it wraps an app's entrypoint
+(`subtrace run -- <cmd>`) and ships the captured requests and responses (headers plus
+the first 4 KiB of each body; `Authorization`/`Cookie` values redacted by default) to
+the **Subtrace SaaS dashboard**. The demo wraps `traefik/whoami` (echoes request
+details back). An init container fetches the pinned release binary from GitHub and
+checks its SHA-256 before use. Test it with
+`kubectl -n subtrace port-forward svc/subtrace-demo 8080:80` and `curl localhost:8080`.
+Without the optional `subtrace-token` Secret, the tracer prints an ephemeral public
+`subt.link` URL in `kubectl -n subtrace logs deploy/subtrace-demo`.
 
 ## Cluster API
 
@@ -157,20 +168,29 @@ target namespace, created out of band.
   objects are reverted to what git says. Change things in git, not with `kubectl`.
 - **Versions are pinned** (charts and the Flux distribution); bump them deliberately.
 - **PodSecurity**: the cluster default (Talos admission config) enforces `baseline`.
-  Every namespace in this repo except `local-path-storage` (hostPath helper pods) is
-  labelled `enforce: restricted`. Charts that don't comply out of the box are fixed
+  Every namespace in this repo is labelled `enforce: restricted` except two
+  exceptions at `privileged`: `local-path-storage` (hostPath helper pods) and
+  `subtrace` (needs `SYS_PTRACE`, which even `baseline` forbids, and must run as root
+  because the node has `kernel.yama.ptrace_scope=2` and user namespaces are disabled;
+  `warn`/`audit` stay at `restricted` there). Charts that don't comply out of the box are fixed
   via values (blocky, capi-operator) or the CAPI operator's `manifestPatches`
   (Talos providers).
-- **Network policy**: `blocky` and the six CAPI/ORC namespaces have a
+- **Network policy**: `blocky`, `subtrace` and the six CAPI/ORC namespaces have a
   `CiliumNetworkPolicy` that default-denies both directions and allows only the flows
   observed in Hubble. New traffic needs a rule in that namespace's `networkpolicy.yaml`;
   look for drops with `hubble observe --namespace <ns> --verdict DROPPED`.
 
 ## Secrets
 
-Nothing sensitive is committed, and nothing currently depends on a Secret created out
-of band. (The Cloudflare tunnel and its `cloudflared-token` Secret were removed on
-2026-11-22; the manifests are in git history.)
+Nothing sensitive is committed. This Secret is created out of band and referenced
+from the manifests:
+
+| Secret | Namespace | Used by |
+|---|---|---|
+| `subtrace-token` (key `SUBTRACE_TOKEN`) | `subtrace` | optional Subtrace tracer token; without it traces go to an ephemeral public link |
+
+(The Cloudflare tunnel and its `cloudflared-token` Secret were removed on 2026-11-22;
+the manifests are in git history.)
 
 ## License
 

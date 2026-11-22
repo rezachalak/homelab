@@ -1,0 +1,134 @@
+# Subtrace (https://subtrace.dev) has no in-cluster component: it wraps an app's
+# entrypoint (`subtrace run -- <cmd>`) inside the app's own container and sends the
+# captured HTTP requests/responses to the Subtrace dashboard. This deploys a small
+# demo target - traefik/whoami, which echoes request details back - wrapped by it.
+#
+# There is no official Subtrace container image, so an init container downloads the
+# pinned release binary (static Go build) and verifies it against the SHA-256 that
+# GitHub publishes for the release asset before it is ever executed.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: subtrace-demo
+  namespace: subtrace
+  labels:
+    app.kubernetes.io/name: subtrace-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: subtrace-demo
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: subtrace-demo
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: fetch-subtrace
+          image: quay.io/curl/curl:8.23.0@sha256:3fb7e13e5d179a845c97d78204f3f1064d1907037f26a3ebf91710571151fd93
+          env:
+            - name: SUBTRACE_VERSION
+              value: b390
+            - name: SUBTRACE_SHA256
+              value: 64d66d592583aa5add0b96d4b8f1e755be51c85b6e0305176d24e278ab57b0b9
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              curl -fsSL --proto '=https' -o /subtrace/subtrace \
+                "https://github.com/subtrace/subtrace/releases/download/${SUBTRACE_VERSION}/subtrace-linux-amd64"
+              echo "${SUBTRACE_SHA256}  /subtrace/subtrace" | sha256sum -c -
+              chmod 0555 /subtrace/subtrace
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+          volumeMounts:
+            - name: subtrace-bin
+              mountPath: /subtrace
+      containers:
+        - name: whoami
+          image: traefik/whoami:v1.12.0@sha256:c4717a8d1f0134a7444e24f881160e033991f23027c6c5a9a3f8fd22e70d1d44
+          command: ["/subtrace/subtrace", "run", "--", "/whoami", "--port", "8080"]
+          env:
+            # Tracer token from the Subtrace dashboard (Tokens page). Optional: without
+            # it, Subtrace prints an ephemeral public subt.link URL in the pod logs instead.
+            - name: SUBTRACE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: subtrace-token
+                  key: SUBTRACE_TOKEN
+                  optional: true
+          ports:
+            - name: http
+              containerPort: 8080
+          # TCP (not HTTP) probes so kubelet health checks don't show up as traced requests.
+          readinessProbe:
+            tcpSocket:
+              port: http
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 10
+          # Why root + SYS_PTRACE: the tracer takes the app's seccomp-notify fd with
+          # pidfd_getfd(2), which is a ptrace-attach check. This node runs with
+          # kernel.yama.ptrace_scope=2, so that needs an *effective* CAP_SYS_PTRACE, and
+          # Kubernetes only grants added capabilities to uid 0 (no ambient caps). User
+          # namespaces (hostUsers: false) would make that root unprivileged on the host,
+          # but Talos ships with user.max_user_namespaces=0. Everything else is locked down.
+          securityContext:
+            runAsUser: 0
+            runAsNonRoot: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+              add: ["SYS_PTRACE"]
+          resources:
+            requests:
+              cpu: 20m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          volumeMounts:
+            - name: subtrace-bin
+              mountPath: /subtrace
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: subtrace-bin
+          emptyDir:
+            sizeLimit: 128Mi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: subtrace-demo
+  namespace: subtrace
+  labels:
+    app.kubernetes.io/name: subtrace-demo
+spec:
+  selector:
+    app.kubernetes.io/name: subtrace-demo
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
