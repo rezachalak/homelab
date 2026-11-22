@@ -1,0 +1,70 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "timezone": "Europe/Vienna",
+  "labels": ["dependencies"],
+  "dependencyDashboard": {
+    "title": "Renovate dependency dashboard"
+  },
+  "minimumReleaseAge": "3 days",
+  "flux": {
+    "managerFilePatterns": ["/\\.ya?ml$/"]
+  },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Flux distribution version in the FluxInstance",
+      "managerFilePatterns": ["/(^|/)flux-instance\\.ya?ml$/"],
+      "matchStrings": ["distribution:\\s*\\n\\s+version:\\s*\"?(?<currentValue>[^\"\\s]+)\"?"],
+      "depNameTemplate": "fluxcd/flux2",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.*)$"
+    },
+    {
+      "customType": "regex",
+      "description": "Versions annotated with a '# renovate:' comment on the line above",
+      "managerFilePatterns": ["/\\.ya?ml$/"],
+      "matchStrings": [
+        "#\\s*renovate:\\s*datasource=(?<datasource>\\S+)\\s+depName=(?<depName>\\S+)\\s*\\n\\s*version:\\s*\"?(?<currentValue>[^\"\\s]+)\"?"
+      ]
+    },
+    {
+      "customType": "regex",
+      "description": "GitHub release download URLs (Talos CAPI providers, ORC)",
+      "managerFilePatterns": ["/\\.ya?ml$/"],
+      "matchStrings": [
+        "https://github\\.com/(?<depName>[^/\\s]+/[^/\\s]+)/releases/download/(?<currentValue>v[^/\\s]+)/"
+      ],
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "description": "Tagged raw.githubusercontent.com URLs (Gateway API CRDs)",
+      "managerFilePatterns": ["/\\.ya?ml$/"],
+      "matchStrings": [
+        "https://raw\\.githubusercontent\\.com/(?<depName>[^/\\s]+/[^/\\s]+)/(?<currentValue>v\\d[^/\\s]*)/"
+      ],
+      "datasourceTemplate": "github-releases"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Renovate publishes several releases a day; batch its own chart weekly",
+      "matchDatasources": ["helm"],
+      "matchPackageNames": ["renovate"],
+      "schedule": ["before 6am on monday"]
+    },
+    {
+      "description": "Cluster API providers must stay contract-compatible with core CAPI; review together",
+      "matchPackageNames": [
+        "kubernetes-sigs/cluster-api",
+        "kubernetes-sigs/cluster-api-provider-openstack",
+        "siderolabs/cluster-api-bootstrap-provider-talos",
+        "siderolabs/cluster-api-control-plane-provider-talos",
+        "k-orc/openstack-resource-controller"
+      ],
+      "groupName": "Cluster API providers",
+      "separateMajorMinor": false
+    }
+  ]
+}
