@@ -5,9 +5,12 @@ metadata:
   namespace: cloudflared
 spec:
   interval: 1h
+  driftDetection:
+    mode: enabled
   chart:
     spec:
       chart: cloudflare-tunnel-remote
+      version: "0.1.2"
       sourceRef:
         kind: HelmRepository
         name: cloudflare
@@ -19,6 +22,32 @@ spec:
       valuesKey: TUNNEL_TOKEN
       targetPath: cloudflare.tunnel_token
   values:
-    replicaCount: 2
+    # Tunnel is deliberately OFF: it had been scaled to 0 by hand, and with drift
+    # detection on Flux would otherwise bring it back to 2. Before raising this,
+    # add an egress rule for the tunnel's origin service(s) to networkpolicy.yaml.
+    replicaCount: 0
     image:
       tag: "2026.8.2"
+  # Chart 0.1.2 defines podSecurityContext/securityContext values but its Deployment
+  # template never renders them, so apply them here to satisfy PodSecurity "restricted".
+  postRenderers:
+    - kustomize:
+        patches:
+          - target:
+              kind: Deployment
+            patch: |
+              - op: add
+                path: /spec/template/spec/securityContext
+                value:
+                  runAsNonRoot: true
+                  runAsUser: 65532
+                  runAsGroup: 65532
+                  seccompProfile:
+                    type: RuntimeDefault
+              - op: add
+                path: /spec/template/spec/containers/0/securityContext
+                value:
+                  allowPrivilegeEscalation: false
+                  readOnlyRootFilesystem: true
+                  capabilities:
+                    drop: ["ALL"]

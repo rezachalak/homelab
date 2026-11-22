@@ -27,6 +27,20 @@ spec:
   version: v0.6.12
   fetchConfig:
     url: https://github.com/siderolabs/cluster-api-bootstrap-provider-talos/releases/download/v0.6.12/bootstrap-components.yaml
+  # Upstream manifests already drop caps and run as 65532 but don't set runAsNonRoot
+  # or a seccomp profile, which PodSecurity "restricted" (enforced on the namespace)
+  # requires. RFC 7396 merge patch applied by the operator to the rendered manifests.
+  manifestPatches:
+    - |
+      apiVersion: apps/v1
+      kind: Deployment
+      spec:
+        template:
+          spec:
+            securityContext:
+              runAsNonRoot: true
+              seccompProfile:
+                type: RuntimeDefault
 ---
 apiVersion: operator.cluster.x-k8s.io/v1alpha2
 kind: ControlPlaneProvider
@@ -37,3 +51,17 @@ spec:
   version: v0.5.13
   fetchConfig:
     url: https://github.com/siderolabs/cluster-api-control-plane-provider-talos/releases/download/v0.5.13/control-plane-components.yaml
+  # Upstream manifests already drop caps and run as 65532 but don't set runAsNonRoot
+  # or a seccomp profile, which PodSecurity "restricted" (enforced on the namespace)
+  # requires. RFC 7396 merge patch applied by the operator to the rendered manifests.
+  manifestPatches:
+    - |
+      apiVersion: apps/v1
+      kind: Deployment
+      spec:
+        template:
+          spec:
+            securityContext:
+              runAsNonRoot: true
+              seccompProfile:
+                type: RuntimeDefault

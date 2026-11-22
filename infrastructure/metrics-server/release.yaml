@@ -5,9 +5,12 @@ metadata:
   namespace: kube-system
 spec:
   interval: 1h
+  driftDetection:
+    mode: enabled
   chart:
     spec:
       chart: metrics-server
+      version: "3.14.0"
       sourceRef:
         kind: HelmRepository
         name: metrics-server

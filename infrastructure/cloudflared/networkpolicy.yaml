@@ -1,0 +1,42 @@
+# Default-deny for the tunnel, which is the one path from the internet into the cluster.
+#   in:  kubelet probes only (metrics/ready on :2000)
+#   out: cluster DNS, and Cloudflare's edge (7844 TCP/UDP for the tunnel, 443 for the API)
+#
+# The tunnel is remotely managed, so its origin services are defined in the Cloudflare
+# dashboard, not here. Nothing in the cluster is reachable through it until you add an
+# egress rule for each origin, e.g.:
+#     - toEndpoints:
+#         - matchLabels:
+#             k8s:io.kubernetes.pod.namespace: <app-namespace>
+#             k8s:app.kubernetes.io/name: <app>
+#       toPorts:
+#         - ports:
+#             - port: "<port>"
+#               protocol: TCP
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: cloudflared
+  namespace: cloudflared
+spec:
+  endpointSelector: {}
+  ingress:
+    - fromEntities:
+        - host
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+    - toEntities:
+        - world
+      toPorts:
+        - ports:
+            - port: "7844"
+              protocol: ANY
+            - port: "443"
+              protocol: TCP

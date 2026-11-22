@@ -5,10 +5,12 @@ metadata:
   namespace: kube-system
 spec:
   interval: 1h
+  driftDetection:
+    mode: enabled
   chart:
     spec:
       chart: cilium
-      version: "1.20.x"
+      version: "1.20.5"
       sourceRef:
         kind: HelmRepository
         name: cilium
