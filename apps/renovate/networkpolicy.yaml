@@ -1,0 +1,28 @@
+# Default-deny for Renovate. It only makes outbound HTTPS calls: the GitHub API
+# (token minting, PRs, branches, platform commits) and the package registries it
+# looks versions up in (Helm repos, GitHub releases). Nothing connects to it.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: renovate
+  namespace: renovate
+spec:
+  endpointSelector: {}
+  # An empty rule selects no peers: puts the pods in ingress default-deny.
+  ingress:
+    - {}
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+    - toEntities:
+        - world
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP

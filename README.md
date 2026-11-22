@@ -44,7 +44,7 @@ flowchart TD
         p["CoreProvider · OpenStack<br/>Talos bootstrap + control-plane"]
     end
     subgraph s3["3 · ./apps"]
-        a["blocky"]
+        a["blocky · renovate"]
     end
 
     s1 ==>|"dependsOn, wait: true"| s2
@@ -95,12 +95,35 @@ Everything in `infrastructure/` that isn't Cluster API:
 
 ## Apps
 
-The only workload in `apps/` right now is Blocky.
+Two workloads live in `apps/`: Blocky and Renovate.
 
 **`blocky`** — LAN DNS on `192.168.25.100`. DoH upstreams (Quad9, Cloudflare) with
 `parallel_best`, StevenBlack's list for ad blocking, and a `customDNS` entry mapping
 `rezoreyz.lan` to the gateway. Blocky has no runtime-mutable state, so the config
 block in `release.yaml` is the actual source of truth.
+
+**`renovate`** — self-hosted [Renovate](https://docs.renovatebot.com/) as a CronJob
+(hourly at :17, Europe/Vienna) that scans this repo and opens PRs when something it
+deploys has a new release. It runs as a private GitHub App, so its PRs come from the
+app's `[bot]` user and its commits are created through GitHub's API (`platformCommit`)
+and signed by GitHub, which satisfies the signed-commits rule on `main`. Each run mints
+a 1-hour installation token scoped to this repo (`github-app-token.mjs`, Node built-ins
+only) right before Renovate starts.
+
+What it tracks is configured in [`renovate.json`](renovate.json):
+
+| Source | How |
+|---|---|
+| `HelmRelease` chart versions, the local-path `GitRepository` tag | built-in `flux` manager |
+| Flux distribution in the `FluxInstance` | regex → `fluxcd/flux2` GitHub releases |
+| CAPI provider CR versions | `# renovate:` comments in `capi-providers/providers.yaml` |
+| Talos provider `fetchConfig` URLs, ORC `install.yaml` | regex on GitHub release-download URLs |
+| Gateway API CRD URLs | regex on tagged `raw.githubusercontent.com` URLs |
+
+Releases must be 3 days old before a PR opens (`minimumReleaseAge`), the CAPI
+providers are grouped into one PR, and Renovate's own chart is batched weekly. Open
+updates are listed in the "Renovate dependency dashboard" issue. Talos and Kubernetes
+versions live in `my-talos`, not here, so Renovate doesn't track them.
 
 ## Cluster API
 
@@ -159,18 +182,30 @@ target namespace, created out of band.
 - **PodSecurity**: the cluster default (Talos admission config) enforces `baseline`.
   Every namespace in this repo except `local-path-storage` (hostPath helper pods) is
   labelled `enforce: restricted`. Charts that don't comply out of the box are fixed
-  via values (blocky, capi-operator) or the CAPI operator's `manifestPatches`
+  via values (blocky, capi-operator, renovate) or the CAPI operator's `manifestPatches`
   (Talos providers).
-- **Network policy**: `blocky` and the six CAPI/ORC namespaces have a
+- **Network policy**: `blocky`, `renovate` and the six CAPI/ORC namespaces have a
   `CiliumNetworkPolicy` that default-denies both directions and allows only the flows
   observed in Hubble. New traffic needs a rule in that namespace's `networkpolicy.yaml`;
   look for drops with `hubble observe --namespace <ns> --verdict DROPPED`.
 
 ## Secrets
 
-Nothing sensitive is committed, and nothing currently depends on a Secret created out
-of band. (The Cloudflare tunnel and its `cloudflared-token` Secret were removed on
-2026-11-22; the manifests are in git history.)
+Nothing sensitive is committed. This Secret is created out of band and referenced
+from the manifests:
+
+| Secret | Namespace | Keys | Used by |
+|---|---|---|---|
+| `renovate-github-app` | `renovate` | `app-id`, `private-key.pem` | Renovate's GitHub App credentials |
+
+```sh
+kubectl create secret generic renovate-github-app -n renovate \
+  --from-literal=app-id=<APP_ID> \
+  --from-file=private-key.pem=<path/to/app>.private-key.pem
+```
+
+(The Cloudflare tunnel and its `cloudflared-token` Secret were removed on 2026-11-22;
+the manifests are in git history.)
 
 ## License
 

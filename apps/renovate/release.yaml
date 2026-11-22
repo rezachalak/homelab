@@ -1,0 +1,103 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: renovate
+  namespace: renovate
+spec:
+  interval: 1h
+  driftDetection:
+    mode: enabled
+  chart:
+    spec:
+      chart: renovate
+      version: "46.449.9"
+      sourceRef:
+        kind: HelmRepository
+        name: renovate
+  values:
+    cronjob:
+      schedule: "17 * * * *"
+      timeZone: Europe/Vienna
+      concurrencyPolicy: Forbid
+      successfulJobsHistoryLimit: 1
+      failedJobsHistoryLimit: 3
+      jobBackoffLimit: 0
+      # Must finish before the installation token minted at start-up expires (1h).
+      activeDeadlineSeconds: 3000
+      # Mint a GitHub App installation token, then start Renovate through the image's
+      # normal entrypoint. The token only ever lives in this process's environment.
+      commandOverride: ["/bin/bash", "-c"]
+      argsOverride:
+        - |
+          set -euo pipefail
+          RENOVATE_TOKEN="$(node /opt/github-app-token/github-app-token.mjs)"
+          export RENOVATE_TOKEN
+          exec /usr/local/sbin/renovate-entrypoint.sh renovate
+
+    # Global (self-hosted) config; per-repo config lives in renovate.json at the repo root.
+    renovate:
+      config: |
+        {
+          "platform": "github",
+          "repositories": ["rezachalak/homelab"],
+          "onboarding": false,
+          "requireConfig": "required",
+          "platformCommit": "enabled"
+        }
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: ["ALL"]
+
+    # PodSecurity "restricted". The image's user is 12021 (primary group 0); its home
+    # dotfiles all point into /tmp/containerbase, so a writable /tmp is all it needs.
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 12021
+      runAsGroup: 0
+      seccompProfile:
+        type: RuntimeDefault
+
+    env:
+      GITHUB_REPOSITORY: rezachalak/homelab
+      GITHUB_APP_PRIVATE_KEY_FILE: /etc/github-app/private-key.pem
+      LOG_LEVEL: info
+    envList:
+      # Out-of-band Secret (see README): keys `app-id` and `private-key.pem`.
+      - name: GITHUB_APP_ID
+        valueFrom:
+          secretKeyRef:
+            name: renovate-github-app
+            key: app-id
+
+    extraVolumes:
+      - name: tmp
+        emptyDir:
+          sizeLimit: 2Gi
+      - name: github-app-token
+        configMap:
+          name: renovate-github-app-token
+      - name: github-app
+        secret:
+          secretName: renovate-github-app
+          defaultMode: 0440
+          items:
+            - key: private-key.pem
+              path: private-key.pem
+    extraVolumeMounts:
+      - name: tmp
+        mountPath: /tmp
+      - name: github-app-token
+        mountPath: /opt/github-app-token
+        readOnly: true
+      - name: github-app
+        mountPath: /etc/github-app
+        readOnly: true
+
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        memory: 1Gi
